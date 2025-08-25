@@ -1,15 +1,16 @@
 // ==UserScript==
-// @name         漂流瓶 (改良版)
-// @author       Dogbird狗鸟 (modified)
-// @version      1.1.0
+// @name         漂流瓶
+// @author       Dogbird狗鸟
+// @version      1.2.0
 // @description  改自自己编写的lua版本漂流瓶，发送 .漂流瓶帮助 查看帮助
 // @timestamp    2025/8/25
 // @license      MIT
+// @homepageURL  https://github.com/WhiteDBird/sealDicejs
 // ==/UserScript==
 
 (function () {
   if (seal.ext.find('bottle-pro')) return;
-  const ext = seal.ext.new('bottle-pro', 'Dogbird狗鸟', '1.1.0');
+  const ext = seal.ext.new('bottle-pro', 'Dogbird狗鸟', '1.2.0');
   seal.ext.register(ext);
 
   // ---------- 公共工具 ----------
@@ -65,10 +66,10 @@
       thrown_dead: '亡魂也能扔下执念（你仍在逝去的彼端）……瓶子沉沉落海。',
       throwing_dead: '你脚下一滑跌入海中，挣扎间化作一具冰冷的尸体……',
       pick_dead: '你在海边打捞，不慎遭遇意外，没能上岸……',
-      pick_found_bottle_live: '你捡到一个瓶子：\n来自 {nick}\n----------\n{content}\nTime: {time}',
+      pick_found_bottle_live: '你捡到一个瓶子：\n来自 {ownerNick}[{ownerQQ}]\n----------\n{content}\nTime: {time}',
       pick_found_bottle_dead: '{nick}的灵魂从海里飘起千里迢迢来到岸边，扯了扯海边播下的网，取下了一个瓶子：\n来自 {ownerNick}[{ownerQQ}]\n----------\n{content}\nTime: {time}',
-      pick_found_corpse_live: '你打捞上来的是一具尸体……\n{ownerNick} 于 {time} 不幸溺亡\n死因：{cause}',
-      pick_found_corpse_dead: '{nick}的灵魂从海里飘起千里迢迢来到岸边，但是这次网里却是一具尸体...\n{ownerNick}[{ownerQQ}] 于 {time} 不幸淹死。\n死因：{cause}',
+      pick_found_corpse_live: '你打捞上来的是一具尸体……\n{ownerNick}[{ownerQQ}] 于 {time} 不幸溺亡\n死因：{cause}\n{ownerNick}重新复活了！',
+      pick_found_corpse_dead: '{nick}的灵魂从海里飘起千里迢迢来到岸边，但是这次网里却是一具尸体...\n{ownerNick}[{ownerQQ}] 于 {time} 不幸淹死。\n死因：{cause}\n{ownerNick}重新复活了！',
       into_dead: '你潜入海中查看，巨浪袭来，将你卷入深处……'
     }
   };
@@ -111,7 +112,7 @@
   // 注册 UI 编辑（会把完整 JSON 放在扩展配置里）
   seal.ext.registerStringConfig(ext, 'config.json', JSON.stringify(config, null, 2), '漂流瓶配置(JSON)');
 
-  // 如果用户在扩展配置改了 JSON，管理员需要点“保存/应用”后将该 JSON 写回 storage（这里尝试安全解析并写回）
+  // 如果用户在扩展配置改了 JSON，管理员需要点"保存/应用"后将该 JSON 写回 storage（这里尝试安全解析并写回）
   function reloadConfigFromStorage() {
     const raw = ext.storageGet(KEY.CONFIG);
     if (!raw) return;
@@ -172,6 +173,31 @@
   }
 
   const reply = (ctx, msg, text) => seal.replyToSender(ctx, msg, text);
+
+  // 统一格式化消息（兼容旧模板占位符）
+  function formatPickupMessage(template, {
+    pickerNick,
+    ownerNick,
+    ownerQQ,
+    content,
+    time,
+    cause
+  }) {
+    let tpl = String(template || '');
+    // 兼容：如果模板里没有 {ownerNick}，但含有 {nick}，则按“瓶主”替换 {nick}
+    if (!tpl.includes('{ownerNick}') && tpl.includes('{nick}')) {
+      tpl = tpl.replace(/\{nick\}/g, ownerNick || '未知');
+    }
+    // 标准占位符替换
+    return tpl
+      .replace(/\{nick\}/g, pickerNick || '')
+      .replace(/\{pickerNick\}/g, pickerNick || '')
+      .replace(/\{ownerNick\}/g, ownerNick || '')
+      .replace(/\{ownerQQ\}/g, ownerQQ || '')
+      .replace(/\{content\}/g, content || '')
+      .replace(/\{time\}/g, time || '')
+      .replace(/\{cause\}/g, cause || '');
+  }
 
   // 发送通知到指定管理群（多重尝试：不同 seal 环境 API 可能不同）
   function sendToGroupFallback(groupId, text, ctx, msg) {
@@ -292,12 +318,13 @@
       const out = (userState[qq] === 'dead')
         ? config.msg.pick_found_bottle_dead
         : config.msg.pick_found_bottle_live;
-      const textOut = out
-        .replace('{nick}', nick)
-        .replace('{ownerNick}', item.nick || '未知')
-        .replace('{ownerQQ}', item.qq || '')
-        .replace('{content}', item.message || '')
-        .replace('{time}', item.time || '');
+      const textOut = formatPickupMessage(out, {
+        pickerNick: nick,
+        ownerNick: item.nick || '未知',
+        ownerQQ: item.qq || '',
+        content: item.message || '',
+        time: item.time || ''
+      });
       // 设置 cd
       cdPick[qq] = nowSec() + config.pick_cd;
       ensurePersist();
@@ -310,12 +337,13 @@
       const out = (userState[qq] === 'dead')
         ? config.msg.pick_found_corpse_dead
         : config.msg.pick_found_corpse_live;
-      const textOut = out
-        .replace('{nick}', nick)
-        .replace('{ownerNick}', item.nick || '未知')
-        .replace('{ownerQQ}', item.qq || '')
-        .replace('{cause}', item.cause || '')
-        .replace('{time}', item.time || '');
+      const textOut = formatPickupMessage(out, {
+        pickerNick: nick,
+        ownerNick: item.nick || '未知',
+        ownerQQ: item.qq || '',
+        cause: item.cause || '',
+        time: item.time || ''
+      });
       // 设置 cd
       cdPick[qq] = nowSec() + config.pick_cd;
       ensurePersist();
@@ -379,21 +407,23 @@
       if (!(idx >= 1 && idx <= bottles.length)) { reply(ctx, msg, '没有这个编号的瓶子。'); return seal.ext.newCmdExecuteResult(true); }
       const item = bottles[idx - 1];
       if (item.type === 'bottle') {
-        reply(ctx, msg, `第${idx}个瓶子：\n来自 ${item.nick}\n----------\n${item.message}\nTime: ${item.time}`);
+        reply(ctx, msg, `第${idx}个瓶子：\n来自 ${item.nick}[${item.qq}]\n----------\n${item.message}\nTime: ${item.time}`);
       } else {
-        reply(ctx, msg, `第${idx}个尸体：\n${item.nick} 于 ${item.time} 不幸溺亡\n死因：${item.cause}`);
+        reply(ctx, msg, `第${idx}个尸体：\n${item.nick}[${item.qq}] 于 ${item.time} 不幸溺亡\n死因：${item.cause}`);
       }
       return seal.ext.newCmdExecuteResult(true);
     }
 
     const qq = text.match(/\d+/)?.[0];
     if (!qq) { reply(ctx, msg, '请输入QQ号数字。'); return seal.ext.newCmdExecuteResult(true); }
-    const arr = bottles.filter(b => String(b.qq) === String(qq));
+         const arr = bottles
+       .map((b, idx) => ({ b, globalIdx: idx + 1 }))
+       .filter(x => String(x.b.qq).replace(/^QQ:/, '') === String(qq));
     if (!arr.length) { reply(ctx, msg, '没有找到记录。'); return seal.ext.newCmdExecuteResult(true); }
-    let lines = arr.map((b, i) =>
-      b.type === 'bottle'
-        ? `ID:${i + 1} 来自 ${b.nick}\nTime:${b.time}\n内容:${b.message}`
-        : `ID:${i + 1} 尸体:${b.nick}\nTime:${b.time}\n死因:${b.cause}`
+    let lines = arr.map((x, i) =>
+      x.b.type === 'bottle'
+        ? `ID:${i + 1} (#${x.globalIdx}) 来自 ${x.b.nick}[${x.b.qq}]\nTime:${x.b.time}\n内容:${x.b.message}`
+        : `ID:${i + 1} (#${x.globalIdx}) 尸体:${x.b.nick}[${x.b.qq}]\nTime:${x.b.time}\n死因:${x.b.cause}`
     );
     reply(ctx, msg, lines.join('\n\n'));
     return seal.ext.newCmdExecuteResult(true);
@@ -409,33 +439,53 @@
 
     const caller = getQQ(ctx, msg);
     const text = stripCommandPrefix(msg.message, '下水回收');
-    if (!text) { reply(ctx, msg, '请输入 QQ 或 #ID。'); return seal.ext.newCmdExecuteResult(true); }
+    if (!text) { 
+      reply(ctx, msg, '请输入 QQ 或 #ID。\n示例：.下水回收 #1 或 .下水回收 123456'); 
+      return seal.ext.newCmdExecuteResult(true); 
+    }
 
     if (text.startsWith('#')) {
       const idx = Number(text.replace('#', '').trim());
-      if (!(idx >= 1 && idx <= bottles.length)) { reply(ctx, msg, '没有这个编号。'); return seal.ext.newCmdExecuteResult(true); }
+      if (!(idx >= 1 && idx <= bottles.length)) { 
+        reply(ctx, msg, `没有这个编号。当前共有 ${bottles.length} 个瓶子/尸体。`); 
+        return seal.ext.newCmdExecuteResult(true); 
+      }
       const rec = bottles[idx - 1];
       if (!isDiceMaster(ctx) && String(rec.qq) !== String(caller)) {
         reply(ctx, msg, '只有骰主或本人可以删除这条记录。'); return seal.ext.newCmdExecuteResult(true);
       }
       bottles.splice(idx - 1, 1);
       ensurePersist();
-      reply(ctx, msg, `已删除第${idx}条记录。`);
+      reply(ctx, msg, `已删除第${idx}条记录（${rec.type === 'bottle' ? '瓶子' : '尸体'}）。`);
       return seal.ext.newCmdExecuteResult(true);
     }
 
-    const qq = text.match(/\d+/)?.[0];
-    if (!qq) { reply(ctx, msg, '请输入QQ号数字。'); return seal.ext.newCmdExecuteResult(true); }
-    if (!isDiceMaster(ctx) && String(qq) !== String(caller)) {
-      reply(ctx, msg, '只有骰主或本人可以删除这些记录。'); return seal.ext.newCmdExecuteResult(true);
-    }
-    const before = bottles.length;
-    for (let i = bottles.length - 1; i >= 0; i--) {
-      if (String(bottles[i].qq) === String(qq)) bottles.splice(i, 1);
-    }
-    ensurePersist();
-    reply(ctx, msg, `已删除 ${before - bottles.length} 条记录。`);
-    return seal.ext.newCmdExecuteResult(true);
+         const qq = text.match(/\d+/)?.[0];
+     if (!qq) { 
+       reply(ctx, msg, '请输入QQ号数字。\n示例：.下水回收 123456'); 
+       return seal.ext.newCmdExecuteResult(true); 
+     }
+     if (!isDiceMaster(ctx) && String(qq) !== String(caller)) {
+       reply(ctx, msg, '只有骰主或本人可以删除这些记录。'); return seal.ext.newCmdExecuteResult(true);
+     }
+     
+           // 调试信息：显示所有瓶子的QQ号格式
+      const matchingBottles = bottles.filter(b => String(b.qq).replace(/^QQ:/, '') === String(qq));
+      const allQQs = bottles.map(b => ({ qq: b.qq, type: b.type, nick: b.nick }));
+      
+      const before = bottles.length;
+      for (let i = bottles.length - 1; i >= 0; i--) {
+        if (String(bottles[i].qq).replace(/^QQ:/, '') === String(qq)) bottles.splice(i, 1);
+      }
+     ensurePersist();
+     
+     const deleted = before - bottles.length;
+     if (deleted === 0) {
+       reply(ctx, msg, `未找到QQ为 ${qq} 的记录。\n当前所有瓶子：${allQQs.map(b => `${b.qq}(${b.type})`).join(', ')}`);
+     } else {
+       reply(ctx, msg, `已删除 ${deleted} 条记录（QQ: ${qq}）。`);
+     }
+     return seal.ext.newCmdExecuteResult(true);
   };
   ext.cmdMap[cmdDelete.name] = cmdDelete;
 
@@ -457,14 +507,39 @@
 
     const qq = text.match(/\d+/)?.[0];
     if (!qq) { reply(ctx, msg, '请输入QQ号数字。'); return seal.ext.newCmdExecuteResult(true); }
-    for (let i = bottles.length - 1; i >= 0; i--) {
-      if (String(bottles[i].qq) === String(qq)) bottles.splice(i, 1);
-    }
+         for (let i = bottles.length - 1; i >= 0; i--) {
+       if (String(bottles[i].qq).replace(/^QQ:/, '') === String(qq)) bottles.splice(i, 1);
+     }
     ensurePersist();
     reply(ctx, msg, `已清空 ${qq} 的所有记录。`);
     return seal.ext.newCmdExecuteResult(true);
   };
   ext.cmdMap[cmdClear.name] = cmdClear;
+
+  // 清空所有人漂流瓶并恢复状态
+  const cmdClearAll = seal.ext.newCmdItemInfo();
+  cmdClearAll.name = '清空所有人漂流瓶';
+  cmdClearAll.solve = (ctx, msg) => {
+    const deny = checkBasic(ctx);
+    if (deny) { reply(ctx, msg, deny); return seal.ext.newCmdExecuteResult(true); }
+    if (!isDiceMaster(ctx)) { reply(ctx, msg, '只有骰主可以操作。'); return seal.ext.newCmdExecuteResult(true); }
+
+    const beforeBottles = bottles.length;
+    const beforeDeadUsers = Object.keys(userState).filter(qq => userState[qq] === 'dead').length;
+    
+    // 清空所有漂流瓶
+    bottles.splice(0, bottles.length);
+    
+    // 将所有用户状态恢复为live
+    for (const qq in userState) {
+      userState[qq] = 'live';
+    }
+    
+    ensurePersist();
+    reply(ctx, msg, `已清空所有漂流瓶（${beforeBottles}个）并复活所有用户（${beforeDeadUsers}个）。`);
+    return seal.ext.newCmdExecuteResult(true);
+  };
+  ext.cmdMap[cmdClearAll.name] = cmdClearAll;
 
   // 群开关（群内开启/关闭）
   const cmdOn = seal.ext.newCmdItemInfo();
@@ -525,6 +600,7 @@
 .查询漂流瓶 #编号 或 QQ号
 .下水回收 #编号 或 QQ号
 .清空漂流瓶 [QQ号]
+.清空所有人漂流瓶
 .开启漂流瓶 / 关闭漂流瓶
 .漂流瓶全局开启 / 漂流瓶全局关闭
 
