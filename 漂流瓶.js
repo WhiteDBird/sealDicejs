@@ -164,11 +164,11 @@
   }
 
   function checkBasic(ctx) {
-    if (config.dis_priv && isPrivate(ctx)) return '（禁止在私聊中使用漂流瓶）';
-    if (switchGlobal !== 'on') return '漂流瓶功能已被全局关闭。';
+    if (config.dis_priv && isPrivate(ctx)) return 'PRIVATE_DENY';
+    if (switchGlobal !== 'on') return 'PRIVATE_DENY';
     const gid = getGroupId(ctx);
-    if (!gid) return '只有群聊可用漂流瓶功能。';
-    if ((switchGroup[gid] || 'off') !== 'on') return '本群漂流瓶功能已关闭。';
+    if (!gid) return 'PRIVATE_DENY';
+    if ((switchGroup[gid] || 'off') !== 'on') return 'PRIVATE_DENY';
     return '';
   }
 
@@ -245,9 +245,12 @@
   // 扔漂流瓶
   const cmdThrow = seal.ext.newCmdItemInfo();
   cmdThrow.name = '扔漂流瓶';
-  cmdThrow.solve = (ctx, msg) => {
-    const deny = checkBasic(ctx);
-    if (deny) { reply(ctx, msg, deny); return seal.ext.newCmdExecuteResult(true); }
+     cmdThrow.solve = (ctx, msg) => {
+     const deny = checkBasic(ctx);
+     if (deny) { 
+       if (deny !== 'PRIVATE_DENY') reply(ctx, msg, deny); 
+       return seal.ext.newCmdExecuteResult(true); 
+     }
 
     const qq = getQQ(ctx, msg);
     const nick = getNick(ctx, msg);
@@ -283,9 +286,12 @@
   // 捡漂流瓶（默认不删除普通瓶；捞到尸体则删除尸体并复活对应用户）
   const cmdPick = seal.ext.newCmdItemInfo();
   cmdPick.name = '捡漂流瓶';
-  cmdPick.solve = (ctx, msg) => {
-    const deny = checkBasic(ctx);
-    if (deny) { reply(ctx, msg, deny); return seal.ext.newCmdExecuteResult(true); }
+     cmdPick.solve = (ctx, msg) => {
+     const deny = checkBasic(ctx);
+     if (deny) { 
+       if (deny !== 'PRIVATE_DENY') reply(ctx, msg, deny); 
+       return seal.ext.newCmdExecuteResult(true); 
+     }
 
     const qq = getQQ(ctx, msg);
     const nick = getNick(ctx, msg);
@@ -356,9 +362,12 @@
   // 下水查看（群级 CD，且有变尸体概率）
   const cmdInto = seal.ext.newCmdItemInfo();
   cmdInto.name = '下水查看';
-  cmdInto.solve = (ctx, msg) => {
-    const deny = checkBasic(ctx);
-    if (deny) { reply(ctx, msg, deny); return seal.ext.newCmdExecuteResult(true); }
+     cmdInto.solve = (ctx, msg) => {
+     const deny = checkBasic(ctx);
+     if (deny) { 
+       if (deny !== 'PRIVATE_DENY') reply(ctx, msg, deny); 
+       return seal.ext.newCmdExecuteResult(true); 
+     }
 
     const gid = getGroupId(ctx);
     const qq = getQQ(ctx, msg);
@@ -395,9 +404,12 @@
   // 查询漂流瓶
   const cmdSearch = seal.ext.newCmdItemInfo();
   cmdSearch.name = '查询漂流瓶';
-  cmdSearch.solve = (ctx, msg) => {
-    const deny = checkBasic(ctx);
-    if (deny) { reply(ctx, msg, deny); return seal.ext.newCmdExecuteResult(true); }
+     cmdSearch.solve = (ctx, msg) => {
+     const deny = checkBasic(ctx);
+     if (deny) { 
+       if (deny !== 'PRIVATE_DENY') reply(ctx, msg, deny); 
+       return seal.ext.newCmdExecuteResult(true); 
+     }
 
     const text = stripCommandPrefix(msg.message, '查询漂流瓶');
     if (!text) { reply(ctx, msg, '请输入 QQ 或 #ID。'); return seal.ext.newCmdExecuteResult(true); }
@@ -433,9 +445,12 @@
   // 下水回收（可按 #ID 或 QQ）
   const cmdDelete = seal.ext.newCmdItemInfo();
   cmdDelete.name = '下水回收';
-  cmdDelete.solve = (ctx, msg) => {
-    const deny = checkBasic(ctx);
-    if (deny) { reply(ctx, msg, deny); return seal.ext.newCmdExecuteResult(true); }
+     cmdDelete.solve = (ctx, msg) => {
+     const deny = checkBasic(ctx);
+     if (deny) { 
+       if (deny !== 'PRIVATE_DENY') reply(ctx, msg, deny); 
+       return seal.ext.newCmdExecuteResult(true); 
+     }
 
     const caller = getQQ(ctx, msg);
     const text = stripCommandPrefix(msg.message, '下水回收');
@@ -492,9 +507,12 @@
   // 清空漂流瓶（可带 QQ）
   const cmdClear = seal.ext.newCmdItemInfo();
   cmdClear.name = '清空漂流瓶';
-  cmdClear.solve = (ctx, msg) => {
-    const deny = checkBasic(ctx);
-    if (deny) { reply(ctx, msg, deny); return seal.ext.newCmdExecuteResult(true); }
+     cmdClear.solve = (ctx, msg) => {
+     const deny = checkBasic(ctx);
+     if (deny) { 
+       if (deny !== 'PRIVATE_DENY') reply(ctx, msg, deny); 
+       return seal.ext.newCmdExecuteResult(true); 
+     }
     if (!isDiceMaster(ctx)) { reply(ctx, msg, '只有骰主可以操作。'); return seal.ext.newCmdExecuteResult(true); }
 
     const text = stripCommandPrefix(msg.message, '清空漂流瓶');
@@ -519,9 +537,12 @@
   // 清空所有人漂流瓶并恢复状态
   const cmdClearAll = seal.ext.newCmdItemInfo();
   cmdClearAll.name = '清空所有人漂流瓶';
-  cmdClearAll.solve = (ctx, msg) => {
-    const deny = checkBasic(ctx);
-    if (deny) { reply(ctx, msg, deny); return seal.ext.newCmdExecuteResult(true); }
+     cmdClearAll.solve = (ctx, msg) => {
+     const deny = checkBasic(ctx);
+     if (deny) { 
+       if (deny !== 'PRIVATE_DENY') reply(ctx, msg, deny); 
+       return seal.ext.newCmdExecuteResult(true); 
+     }
     if (!isDiceMaster(ctx)) { reply(ctx, msg, '只有骰主可以操作。'); return seal.ext.newCmdExecuteResult(true); }
 
     const beforeBottles = bottles.length;
@@ -545,7 +566,13 @@
   const cmdOn = seal.ext.newCmdItemInfo();
   cmdOn.name = '开启漂流瓶';
   cmdOn.solve = (ctx, msg) => {
+    const deny = checkBasic(ctx);
+    if (deny) { 
+      if (deny !== 'PRIVATE_DENY') reply(ctx, msg, deny); 
+      return seal.ext.newCmdExecuteResult(true); 
+    }
     if (!isDiceMaster(ctx)) { reply(ctx, msg, '只有骰主可以操作。'); return seal.ext.newCmdExecuteResult(true); }
+    if (switchGlobal !== 'on') { reply(ctx, msg, '全局漂流瓶功能已关闭，无法开启群漂流瓶。'); return seal.ext.newCmdExecuteResult(true); }
     const gid = getGroupId(ctx);
     switchGroup[gid] = 'on';
     ensurePersist();
@@ -557,6 +584,11 @@
   const cmdOff = seal.ext.newCmdItemInfo();
   cmdOff.name = '关闭漂流瓶';
   cmdOff.solve = (ctx, msg) => {
+    const deny = checkBasic(ctx);
+    if (deny) { 
+      if (deny !== 'PRIVATE_DENY') reply(ctx, msg, deny); 
+      return seal.ext.newCmdExecuteResult(true); 
+    }
     if (!isDiceMaster(ctx)) { reply(ctx, msg, '只有骰主可以操作。'); return seal.ext.newCmdExecuteResult(true); }
     const gid = getGroupId(ctx);
     switchGroup[gid] = 'off';
@@ -570,6 +602,11 @@
   const cmdAllOn = seal.ext.newCmdItemInfo();
   cmdAllOn.name = '漂流瓶全局开启';
   cmdAllOn.solve = (ctx, msg) => {
+    const deny = checkBasic(ctx);
+    if (deny) { 
+      if (deny !== 'PRIVATE_DENY') reply(ctx, msg, deny); 
+      return seal.ext.newCmdExecuteResult(true); 
+    }
     if (!isDiceMaster(ctx)) { reply(ctx, msg, '只有骰主可以操作。'); return seal.ext.newCmdExecuteResult(true); }
     switchGlobal = 'on';
     ensurePersist();
@@ -581,10 +618,19 @@
   const cmdAllOff = seal.ext.newCmdItemInfo();
   cmdAllOff.name = '漂流瓶全局关闭';
   cmdAllOff.solve = (ctx, msg) => {
+    const deny = checkBasic(ctx);
+    if (deny) { 
+      if (deny !== 'PRIVATE_DENY') reply(ctx, msg, deny); 
+      return seal.ext.newCmdExecuteResult(true); 
+    }
     if (!isDiceMaster(ctx)) { reply(ctx, msg, '只有骰主可以操作。'); return seal.ext.newCmdExecuteResult(true); }
     switchGlobal = 'off';
+    // 全局关闭时，将所有群开关也设置为关闭
+    for (const gid in switchGroup) {
+      switchGroup[gid] = 'off';
+    }
     ensurePersist();
-    reply(ctx, msg, '已全局关闭漂流瓶。');
+    reply(ctx, msg, '已全局关闭漂流瓶，所有群漂流瓶功能也已关闭。');
     return seal.ext.newCmdExecuteResult(true);
   };
   ext.cmdMap[cmdAllOff.name] = cmdAllOff;
@@ -593,6 +639,11 @@
   const cmdHelp = seal.ext.newCmdItemInfo();
   cmdHelp.name = '漂流瓶帮助';
   cmdHelp.solve = (ctx, msg) => {
+    const deny = checkBasic(ctx);
+    if (deny) { 
+      if (deny !== 'PRIVATE_DENY') reply(ctx, msg, deny); 
+      return seal.ext.newCmdExecuteResult(true); 
+    }
     reply(ctx, msg, `漂流瓶指令列表：
 .扔漂流瓶 内容   或 扔漂流瓶 内容
 .捡漂流瓶
@@ -614,3 +665,5 @@
 
   // 结束
 })();
+
+
