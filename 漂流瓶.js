@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         漂流瓶
 // @author       Dogbird狗鸟
-// @version      1.2.0
-// @description  改自自己编写的lua版本漂流瓶，发送 .漂流瓶帮助 查看帮助
+// @version      1.3.0
+// @description  改自自己编写的lua版本漂流瓶，发送 .漂流瓶帮助 查看帮助（没有多测试只找过gtp做过一次修改，可能会有奇怪bug出现请联系2838407585）,
 // @timestamp    2025/8/25
 // @license      MIT
 // @homepageURL  https://github.com/WhiteDBird/sealDicejs
@@ -29,7 +29,7 @@
     CONFIG: 'config'
   };
 
-  // 默认配置（**注意**：这些字段会深度合并到用户保存的 config）
+  // 默认配置
   const defaultConfig = {
     dis_priv: true,
     maxlen: 0,
@@ -37,9 +37,7 @@
     pick_cd: 10,
     search_cd: 10,
     into_cd: 10,
-    // 统一把几处概率改成更直观的结构：百分数 (0-100)
     prob: { throw: 10, pick: 10, into: 10 },
-    // 多个随机死因（增加多种变为尸体的方式）
     corpse_causes: {
       throw: [
         '扔漂流瓶时失足掉入水中',
@@ -74,7 +72,6 @@
     }
   };
 
-  // 深度合并（源到目标，返回新对象）
   function deepMerge(target, source) {
     if (!source) return target;
     const out = Array.isArray(target) ? target.slice() : Object.assign({}, target);
@@ -109,10 +106,8 @@
   const savedConfig = read(KEY.CONFIG, {});
   let config = deepMerge(defaultConfig, savedConfig);
 
-  // 注册 UI 编辑（会把完整 JSON 放在扩展配置里）
   seal.ext.registerStringConfig(ext, 'config.json', JSON.stringify(config, null, 2), '漂流瓶配置(JSON)');
 
-  // 如果用户在扩展配置改了 JSON，管理员需要点"保存/应用"后将该 JSON 写回 storage（这里尝试安全解析并写回）
   function reloadConfigFromStorage() {
     const raw = ext.storageGet(KEY.CONFIG);
     if (!raw) return;
@@ -122,7 +117,6 @@
       // 如果保存的 config 有变动，就把标准化后的写回 storage，保证后续运行读取是合并后的版本
       write(KEY.CONFIG, config);
     } catch (e) {
-      // ignore parse error — 保持旧配置
       console.warn('bottle-pro: 无法解析 config.json（保持现有配置）', e);
     }
   }
@@ -155,6 +149,7 @@
   const getNick = (ctx, msg) => (msg?.sender?.nickname || (ctx.player && ctx.player.name) || '未知昵称');
   const getGroupId = (ctx) => (ctx.group && ctx.group.groupId ? String(ctx.group.groupId).replace(/^QQ-Group:/, '') : '');
   const isPrivate = (ctx) => !(ctx.group && ctx.group.groupId);
+  const isGroupAdminOrMaster = (ctx) => ctx.privilegeLevel >= 50; // 新增：群管(>=50)或骰主(>=100)
 
   // 更严格的命令内容截取：支持前导 . 或 全角句号（。），并只取命令后的内容（不会吞掉命令）
   function stripCommandPrefix(msgText, commandBase) {
@@ -566,14 +561,15 @@
   const cmdOn = seal.ext.newCmdItemInfo();
   cmdOn.name = '开启漂流瓶';
   cmdOn.solve = (ctx, msg) => {
-    const deny = checkBasic(ctx);
-    if (deny) { 
-      if (deny !== 'PRIVATE_DENY') reply(ctx, msg, deny); 
-      return seal.ext.newCmdExecuteResult(true); 
+    // 允许在群里开启；不使用 checkBasic（避免因群级关闭而被拦）
+    if (config.dis_priv && isPrivate(ctx)) {
+      reply(ctx, msg, '请在群里使用该指令。');
+      return seal.ext.newCmdExecuteResult(true);
     }
-    if (!isDiceMaster(ctx)) { reply(ctx, msg, '只有骰主可以操作。'); return seal.ext.newCmdExecuteResult(true); }
-    if (switchGlobal !== 'on') { reply(ctx, msg, '全局漂流瓶功能已关闭，无法开启群漂流瓶。'); return seal.ext.newCmdExecuteResult(true); }
     const gid = getGroupId(ctx);
+    if (!gid) { reply(ctx, msg, '请在群里使用该指令。'); return seal.ext.newCmdExecuteResult(true); }
+    if (!isGroupAdminOrMaster(ctx)) { reply(ctx, msg, '只有群管或骰主可以操作。'); return seal.ext.newCmdExecuteResult(true); }
+    if (switchGlobal !== 'on') { reply(ctx, msg, '全局漂流瓶功能已关闭，无法开启群漂流瓶。'); return seal.ext.newCmdExecuteResult(true); }
     switchGroup[gid] = 'on';
     ensurePersist();
     reply(ctx, msg, '已开启本群漂流瓶。');
@@ -584,13 +580,14 @@
   const cmdOff = seal.ext.newCmdItemInfo();
   cmdOff.name = '关闭漂流瓶';
   cmdOff.solve = (ctx, msg) => {
-    const deny = checkBasic(ctx);
-    if (deny) { 
-      if (deny !== 'PRIVATE_DENY') reply(ctx, msg, deny); 
-      return seal.ext.newCmdExecuteResult(true); 
+    // 允许在群里关闭；不使用 checkBasic（避免因群级关闭而被拦）
+    if (config.dis_priv && isPrivate(ctx)) {
+      reply(ctx, msg, '请在群里使用该指令。');
+      return seal.ext.newCmdExecuteResult(true);
     }
-    if (!isDiceMaster(ctx)) { reply(ctx, msg, '只有骰主可以操作。'); return seal.ext.newCmdExecuteResult(true); }
     const gid = getGroupId(ctx);
+    if (!gid) { reply(ctx, msg, '请在群里使用该指令。'); return seal.ext.newCmdExecuteResult(true); }
+    if (!isGroupAdminOrMaster(ctx)) { reply(ctx, msg, '只有群管或骰主可以操作。'); return seal.ext.newCmdExecuteResult(true); }
     switchGroup[gid] = 'off';
     ensurePersist();
     reply(ctx, msg, '已关闭本群漂流瓶。');
@@ -602,11 +599,7 @@
   const cmdAllOn = seal.ext.newCmdItemInfo();
   cmdAllOn.name = '漂流瓶全局开启';
   cmdAllOn.solve = (ctx, msg) => {
-    const deny = checkBasic(ctx);
-    if (deny) { 
-      if (deny !== 'PRIVATE_DENY') reply(ctx, msg, deny); 
-      return seal.ext.newCmdExecuteResult(true); 
-    }
+    // 全局开关不走 checkBasic，避免在全局关闭时被拦
     if (!isDiceMaster(ctx)) { reply(ctx, msg, '只有骰主可以操作。'); return seal.ext.newCmdExecuteResult(true); }
     switchGlobal = 'on';
     ensurePersist();
@@ -618,14 +611,9 @@
   const cmdAllOff = seal.ext.newCmdItemInfo();
   cmdAllOff.name = '漂流瓶全局关闭';
   cmdAllOff.solve = (ctx, msg) => {
-    const deny = checkBasic(ctx);
-    if (deny) { 
-      if (deny !== 'PRIVATE_DENY') reply(ctx, msg, deny); 
-      return seal.ext.newCmdExecuteResult(true); 
-    }
+    // 全局开关不走 checkBasic，避免被拦
     if (!isDiceMaster(ctx)) { reply(ctx, msg, '只有骰主可以操作。'); return seal.ext.newCmdExecuteResult(true); }
     switchGlobal = 'off';
-    // 全局关闭时，将所有群开关也设置为关闭
     for (const gid in switchGroup) {
       switchGroup[gid] = 'off';
     }
@@ -639,11 +627,6 @@
   const cmdHelp = seal.ext.newCmdItemInfo();
   cmdHelp.name = '漂流瓶帮助';
   cmdHelp.solve = (ctx, msg) => {
-    const deny = checkBasic(ctx);
-    if (deny) { 
-      if (deny !== 'PRIVATE_DENY') reply(ctx, msg, deny); 
-      return seal.ext.newCmdExecuteResult(true); 
-    }
     reply(ctx, msg, `漂流瓶指令列表：
 .扔漂流瓶 内容   或 扔漂流瓶 内容
 .捡漂流瓶
@@ -665,5 +648,3 @@
 
   // 结束
 })();
-
-
